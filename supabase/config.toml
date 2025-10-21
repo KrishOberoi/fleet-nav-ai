@@ -1,0 +1,7 @@
+project_id = "jfdehfidajorjeqcfbgh"
+
+[functions.fleet-chat]
+verify_jwt = false
+
+[functions.generate-insights]
+verify_jwt = false
