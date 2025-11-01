@@ -1,12 +1,26 @@
 import { BusData } from '@/types/bus';
 
-const ROUTES = ['Route A', 'Route B', 'Route C', 'Route D', 'Route E'];
-const BUSES_PER_ROUTE = 4;
+// Actual bus routes around Manipal/Udupi area
+const ROUTES = [
+  'Manipal ↔ Udupi',
+  'Manipal ↔ Mangalore',
+  'Udupi ↔ Mangalore',
+  'Manipal ↔ Bangalore',
+  'Udupi ↔ Bangalore',
+  'Manipal ↔ Kundapur',
+  'Udupi ↔ Kundapur',
+  'Manipal Local',
+  'Udupi Local',
+  'Manipal ↔ Shivamogga'
+];
+const BUSES_PER_ROUTE = 3;
 const TOTAL_BUSES = ROUTES.length * BUSES_PER_ROUTE;
 
-// Base coordinates for bus routes (around a city center)
-const BASE_LAT = 40.7128;
-const BASE_LNG = -74.0060;
+// Base coordinates for Manipal/Udupi region
+const MANIPAL_LAT = 13.3525;
+const MANIPAL_LNG = 74.7928;
+const UDUPI_LAT = 13.3409;
+const UDUPI_LNG = 74.7421;
 
 interface BusState {
   busNumber: string;
@@ -21,24 +35,50 @@ let busStates: BusState[] = [];
 
 function initializeBusStates() {
   busStates = [];
+
+  // Route-specific starting positions and directions
+  const routeConfigs = [
+    // Manipal ↔ Udupi (local route)
+    { startLat: MANIPAL_LAT, startLng: MANIPAL_LNG, direction: 4.2 }, // West towards Udupi
+    // Manipal ↔ Mangalore (south)
+    { startLat: MANIPAL_LAT, startLng: MANIPAL_LNG, direction: 5.5 }, // Southwest
+    // Udupi ↔ Mangalore (southwest)
+    { startLat: UDUPI_LAT, startLng: UDUPI_LNG, direction: 5.2 }, // Southwest
+    // Manipal ↔ Bangalore (east)
+    { startLat: MANIPAL_LAT, startLng: MANIPAL_LNG, direction: 1.8 }, // East
+    // Udupi ↔ Bangalore (east)
+    { startLat: UDUPI_LAT, startLng: UDUPI_LNG, direction: 1.6 }, // East
+    // Manipal ↔ Kundapur (north)
+    { startLat: MANIPAL_LAT, startLng: MANIPAL_LNG, direction: 2.8 }, // North
+    // Udupi ↔ Kundapur (north)
+    { startLat: UDUPI_LAT, startLng: UDUPI_LNG, direction: 3.0 }, // North
+    // Manipal Local (around Manipal)
+    { startLat: MANIPAL_LAT, startLng: MANIPAL_LNG, direction: Math.random() * Math.PI * 2 },
+    // Udupi Local (around Udupi)
+    { startLat: UDUPI_LAT, startLng: UDUPI_LNG, direction: Math.random() * Math.PI * 2 },
+    // Manipal ↔ Shivamogga (northeast)
+    { startLat: MANIPAL_LAT, startLng: MANIPAL_LNG, direction: 0.8 }, // Northeast
+  ];
+
   for (let i = 0; i < ROUTES.length; i++) {
+    const routeConfig = routeConfigs[i];
     for (let j = 0; j < BUSES_PER_ROUTE; j++) {
       const busNumber = `BUS-${String(i * BUSES_PER_ROUTE + j + 1).padStart(3, '0')}`;
       const route = ROUTES[i];
-      
-      // Distribute buses across different areas
-      const routeOffset = i * 0.02;
-      const busOffset = j * 0.015;
-      
+
+      // Position buses along their routes with some variation
+      const positionOffset = j * 0.008; // Spread buses along route
+      const randomOffset = (Math.random() - 0.5) * 0.005; // Small random variation
+
       busStates.push({
         busNumber,
         route,
         basePosition: {
-          lat: BASE_LAT + routeOffset + (Math.random() - 0.5) * 0.01,
-          lng: BASE_LNG + busOffset + (Math.random() - 0.5) * 0.01,
+          lat: routeConfig.startLat + Math.cos(routeConfig.direction) * positionOffset + randomOffset,
+          lng: routeConfig.startLng + Math.sin(routeConfig.direction) * positionOffset + randomOffset,
         },
-        direction: Math.random() * Math.PI * 2,
-        currentSpeed: 20 + Math.random() * 30,
+        direction: routeConfig.direction + (Math.random() - 0.5) * 0.5, // Slight direction variation
+        currentSpeed: 15 + Math.random() * 35, // More realistic speeds for Indian roads
         passengerTrend: Math.random(),
       });
     }
@@ -76,24 +116,10 @@ export function generateBusData(): BusData[] {
 
     const capacity = 50;
     const passengerCount = Math.floor(state.passengerTrend * capacity);
-    const avgOccupancy = (passengerCount / capacity) * 100;
-    
-    // 10% chance of maintenance
-    const isUnderMaintenance = Math.random() < 0.05;
-    const operationalStatus = isUnderMaintenance 
-      ? 'maintenance' 
-      : state.currentSpeed < 5 
-        ? 'idle' 
-        : 'active';
 
-    const avgSpeed = state.currentSpeed * 0.85; // Historical average slightly lower
-    const totalJourneyTime = 60 + Math.random() * 40;
-    const estimatedJourneyTime = 70 + Math.random() * 30;
-    const delayTime = Math.max(0, totalJourneyTime - estimatedJourneyTime);
-
+    // ESP32 sensor data only
     buses.push({
       id: `${state.busNumber}-${Date.now()}-${index}`,
-      timestamp: currentTime,
       bus_number: state.busNumber,
       route_name: state.route,
       location: {
@@ -101,17 +127,9 @@ export function generateBusData(): BusData[] {
         lng: state.basePosition.lng,
       },
       speed: Math.round(state.currentSpeed),
-      avg_speed: Math.round(avgSpeed),
       passenger_count: passengerCount,
-      capacity,
-      avg_occupancy: Math.round(avgOccupancy * 100) / 100,
-      total_journey_time: Math.round(totalJourneyTime),
-      estimated_journey_time: Math.round(estimatedJourneyTime),
-      is_under_maintenance: isUnderMaintenance,
-      operational_status: operationalStatus as 'active' | 'idle' | 'maintenance',
-      total_moving_time: Math.round(totalJourneyTime * 0.7),
-      total_stopping_time: Math.round(totalJourneyTime * 0.3),
-      delay_time: Math.round(delayTime),
+      timestamp: currentTime,
+      capacity, // Optional static config
     });
   });
 

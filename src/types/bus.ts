@@ -4,23 +4,17 @@ export interface Location {
 }
 
 export interface BusData {
+  // ESP32 sensor data only
   id: string;
-  timestamp: string;
   bus_number: string;
   route_name: string;
   location: Location;
   speed: number;
-  avg_speed: number;
   passenger_count: number;
-  capacity: number;
-  avg_occupancy: number;
-  total_journey_time: number;
-  estimated_journey_time: number;
-  is_under_maintenance: boolean;
-  operational_status: 'active' | 'idle' | 'maintenance';
-  total_moving_time: number;
-  total_stopping_time: number;
-  delay_time: number;
+  timestamp: string;
+  capacity?: number; // Optional static config
+  
+  // Optional fields for database
   embedding?: number[];
   created_at?: string;
 }

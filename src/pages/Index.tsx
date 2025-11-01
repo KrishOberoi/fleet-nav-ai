@@ -5,9 +5,9 @@ import { BusMap } from '@/components/BusMap';
 import { BusList } from '@/components/BusList';
 import { AIInsightsPanel } from '@/components/AIInsightsPanel';
 import { ChatBot } from '@/components/ChatBot';
-import { generateBusData } from '@/lib/syntheticData';
+import { busSimulator } from '@/lib/busSimulator';
+import { dataPipeline } from '@/lib/dataPipeline';
 import { BusData, FleetStats } from '@/types/bus';
-import { supabase } from '@/integrations/supabase/client';
 
 const Index = () => {
   const [buses, setBuses] = useState<BusData[]>([]);
@@ -20,58 +20,81 @@ const Index = () => {
     busesUnderMaintenance: 0,
   });
 
-  // Generate and update bus data every 5 seconds
+  // Initialize bus simulator and set up real-time updates
   useEffect(() => {
-    const updateBusData = () => {
-      const newBusData = generateBusData();
-      setBuses(newBusData);
-      calculateFleetStats(newBusData);
+    console.log('Starting Delhi bus simulation...');
+
+    // Start the simulator
+    busSimulator.start();
+
+    // Set initial bus data
+    const initialBusData = busSimulator.getBusData();
+    setBuses(initialBusData);
+    calculateFleetStats(initialBusData);
+
+    // Set up real-time updates from simulator
+    const updateCallback = (updatedBuses: BusData[]) => {
+      setBuses(updatedBuses);
+      calculateFleetStats(updatedBuses);
     };
 
-    updateBusData();
-    const interval = setInterval(updateBusData, 5000);
+    busSimulator.onUpdate(updateCallback);
 
-    return () => clearInterval(interval);
+    // Cleanup on unmount
+    return () => {
+      busSimulator.removeCallback(updateCallback);
+    };
   }, []);
 
-  // Store bus data in database every 2 minutes
-  useEffect(() => {
-    const storeBusData = async () => {
-      if (buses.length === 0) return;
 
-      const dataToStore = buses.map((bus) => ({
-        bus_number: bus.bus_number,
-        route_name: bus.route_name,
-        location: bus.location as any,
-        speed: bus.speed,
-        avg_speed: bus.avg_speed,
-        passenger_count: bus.passenger_count,
-        capacity: bus.capacity,
-        avg_occupancy: bus.avg_occupancy,
-        total_journey_time: bus.total_journey_time,
-        estimated_journey_time: bus.estimated_journey_time,
-        is_under_maintenance: bus.is_under_maintenance,
-        operational_status: bus.operational_status,
-        total_moving_time: bus.total_moving_time,
-        total_stopping_time: bus.total_stopping_time,
-        delay_time: bus.delay_time,
-      }));
 
-      const { error } = await supabase.from('bus_data').insert(dataToStore);
+  // Update historical baselines every hour (commented until migration is run)
+  // useEffect(() => {
+  //   const updateBaselines = async () => {
+  //     try {
+  //       console.log('Updating historical baselines...');
+  //       const { error } = await supabase.rpc('update_historical_baselines');
+  //       if (error) {
+  //         console.error('Error updating baselines:', error);
+  //       } else {
+  //         console.log('Historical baselines updated');
+  //       }
+  //     } catch (error) {
+  //       console.error('Error calling update_historical_baselines:', error);
+  //     }
+  //   };
 
-      if (error) {
-        console.error('Error storing bus data:', error);
-      } else {
-        console.log('Bus data stored successfully');
-      }
-    };
+  //   // Update immediately and then every hour
+  //   updateBaselines();
+  //   const interval = setInterval(updateBaselines, 3600000); // 1 hour
 
-    const interval = setInterval(storeBusData, 120000); // 2 minutes
+  //   return () => clearInterval(interval);
+  // }, []);
 
-    return () => clearInterval(interval);
-  }, [buses]);
+  // Detect anomalies every 15 minutes (commented until migration is run)
+  // useEffect(() => {
+  //   const detectAnomalies = async () => {
+  //     try {
+  //       console.log('Detecting anomalies...');
+  //       const { error } = await supabase.rpc('detect_anomalies');
+  //     } catch (error) {
+  //       console.error('Error detecting anomalies:', error);
+  //     }
+  //   };
 
-  // Generate AI insights every 5 minutes
+  //   // Start detecting after 5 minutes and then every 15 minutes
+  //   const initialTimeout = setTimeout(detectAnomalies, 300000); // 5 minutes
+  //   const interval = setInterval(detectAnomalies, 900000); // 15 minutes
+
+  //   return () => {
+  //     clearTimeout(initialTimeout);
+  //     clearInterval(interval);
+  //   };
+  // }, []);
+
+  // Generate AI insights every 5 minutes (disabled due to CORS issues in development)
+  // TODO: Re-enable when Supabase Edge Functions CORS is configured
+  /*
   useEffect(() => {
     const generateInsights = async () => {
       if (buses.length === 0) return;
@@ -91,7 +114,7 @@ const Index = () => {
 
     // Generate insights after initial load
     const initialTimeout = setTimeout(generateInsights, 10000);
-    
+
     // Then every 5 minutes
     const interval = setInterval(generateInsights, 300000);
 
@@ -100,28 +123,28 @@ const Index = () => {
       clearInterval(interval);
     };
   }, [buses]);
+  */
 
   const calculateFleetStats = (busData: BusData[]) => {
-    const activeBuses = busData.filter((b) => b.operational_status === 'active').length;
+    const totalBuses = busData.length;
     const totalPassengers = busData.reduce((sum, b) => sum + b.passenger_count, 0);
     const avgOccupancy = busData.length > 0
-      ? busData.reduce((sum, b) => sum + b.avg_occupancy, 0) / busData.length
+      ? busData.reduce((sum, b) => sum + (b.capacity ? (b.passenger_count / b.capacity) * 100 : 0), 0) / busData.length
       : 0;
-    const maintenanceBuses = busData.filter((b) => b.is_under_maintenance).length;
 
     setFleetStats({
-      totalActiveBuses: activeBuses,
+      totalActiveBuses: totalBuses, // All buses are considered active since we only have ESP32 data
       totalPassengers,
       avgOccupancy: Math.round(avgOccupancy * 10) / 10,
       peakDemandTime: '9:00 AM',
-      busesUnderMaintenance: maintenanceBuses,
+      busesUnderMaintenance: 0, // Backend will manage maintenance status
     });
   };
 
-  const fleetSnapshot = JSON.stringify(buses.slice(0, 5), null, 2);
+  const fleetSnapshot = JSON.stringify(buses, null, 2);
 
   return (
-    <div className="min-h-screen bg-background pb-96">
+    <div className="min-h-screen bg-background pb-32">
       {/* Header */}
       <header className="bg-card border-b border-border sticky top-0 z-10">
         <div className="px-6 py-4">
@@ -130,9 +153,9 @@ const Index = () => {
               <Bus className="w-6 h-6 text-primary" />
             </div>
             <div>
-              <h1 className="text-2xl font-bold">SmartTransit</h1>
+              <h1 className="text-2xl font-bold">Delhi Bus Simulation</h1>
               <p className="text-sm text-muted-foreground">
-                Intelligent Fleet Management System
+                Realistic bus tracking simulation with road-following routes
               </p>
             </div>
           </div>
@@ -143,9 +166,9 @@ const Index = () => {
       <StatsPanel stats={fleetStats} />
 
       {/* Main Content Grid */}
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 p-4 h-[calc(100vh-250px)]">
-        {/* Bus List */}
-        <div className="lg:col-span-3 h-full">
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 p-4" style={{ height: 'calc(100vh - 280px)' }}>
+        {/* Bus List - Compact */}
+        <div className="lg:col-span-2">
           <BusList
             buses={buses}
             selectedBus={selectedBus}
@@ -153,8 +176,8 @@ const Index = () => {
           />
         </div>
 
-        {/* Map */}
-        <div className="lg:col-span-6 h-full">
+        {/* Map - Expanded */}
+        <div className="lg:col-span-8 h-full">
           <BusMap
             buses={buses}
             selectedBus={selectedBus}
@@ -163,12 +186,12 @@ const Index = () => {
         </div>
 
         {/* AI Insights */}
-        <div className="lg:col-span-3 h-full">
+        <div className="lg:col-span-2 h-full">
           <AIInsightsPanel />
         </div>
       </div>
 
-      {/* ChatBot */}
+      {/* ChatBot - Compact */}
       <ChatBot currentFleetSnapshot={fleetSnapshot} />
     </div>
   );

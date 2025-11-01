@@ -5,8 +5,9 @@ import { Button } from '@/components/ui/button';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { MessageSquare, Send, Loader2, ChevronUp, ChevronDown } from 'lucide-react';
 import { ChatMessage } from '@/types/bus';
-import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
+import { dbRetriever } from '@/services/databaseRetriever';
+import { askLLM } from '@/services/llmService';
 
 interface ChatBotProps {
   currentFleetSnapshot: string;
@@ -39,19 +40,19 @@ export function ChatBot({ currentFleetSnapshot }: ChatBotProps) {
     setIsLoading(true);
 
     try {
-      const { data, error } = await supabase.functions.invoke('fleet-chat', {
-        body: {
-          message: input,
-          fleetSnapshot: currentFleetSnapshot,
-          conversationHistory: messages,
-        },
-      });
+      console.log('🤖 Asking chatbot:', input);
 
-      if (error) throw error;
+      // Step 1: Retrieve relevant data from database
+      const contextData = await dbRetriever.getRelevantData(input);
+      console.log('📊 Context data retrieved');
+
+      // Step 2: Send to LLM with context
+      const answer = await askLLM(input, contextData);
+      console.log('✅ LLM response:', answer);
 
       const assistantMessage: ChatMessage = {
         role: 'assistant',
-        content: data.response,
+        content: answer,
         timestamp: new Date().toISOString(),
       };
 
@@ -59,7 +60,7 @@ export function ChatBot({ currentFleetSnapshot }: ChatBotProps) {
     } catch (error: any) {
       console.error('Chat error:', error);
       toast.error('Failed to get response. Please try again.');
-      
+
       const errorMessage: ChatMessage = {
         role: 'assistant',
         content: 'Sorry, I encountered an error. Please try again.',
