@@ -181,6 +181,16 @@ export class BusSimulator {
     const route = getRouteById(bus.routeId);
     if (!route) return;
 
+    // Check if bus should stop at designated stops before moving
+    if (this.shouldStopAtNextStop(bus)) {
+      const stopDuration = 1; // 90 seconds at each stop
+      bus.isStopped = true;
+      bus.stopTimeRemaining = stopDuration;
+      bus.speed = 0;
+      console.log(`🛑 Bus ${bus.bus_number} stopped at ${bus.currentStopName} for ${stopDuration * 90} seconds`);
+      return;
+    }
+
     // Calculate next waypoint index
     let nextIndex = bus.currentWaypointIndex + bus.direction;
 
@@ -197,6 +207,12 @@ export class BusSimulator {
 
     // Update position
     this.updateBusPosition(bus);
+  }
+
+  // Check if bus should stop at the next designated stop
+  private shouldStopAtNextStop(bus: SimulatedBus): boolean {
+    // Only stop if bus is currently at a designated stop
+    return bus.currentStopName !== null && !bus.isStopped;
   }
 
   // Update bus position based on current waypoint

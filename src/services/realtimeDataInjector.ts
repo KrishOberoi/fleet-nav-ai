@@ -60,7 +60,8 @@ export class RealtimeDataInjector {
       return {
         id: bus.bus_number,
         route_id: routeId,
-        location: bus.location
+        location: bus.location,
+        speed: bus.speed  // Add speed for stop detection
       };
     });
 

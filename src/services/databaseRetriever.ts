@@ -156,7 +156,7 @@ export class DatabaseRetriever {
       let incomeQuery = supabase
         .from('hourly_baselines')
         .select('*')
-        .not('avg_income_per_hour', 'is', null); // Only records with income data
+        .neq('avg_income_per_hour', null); // Only records with income data
 
       // Filter by specific day if mentioned
       if (specificDay !== null) {
@@ -175,10 +175,10 @@ export class DatabaseRetriever {
         });
       }
 
-      // Get stop pair income
+      // Get stop pair income (simplified query to avoid complex joins)
       const { data: stopPairIncome } = await supabase
         .from('stop_pair_income')
-        .select('*, stops_from:stops!from_stop_id(stop_name), stops_to:stops!to_stop_id(stop_name)')
+        .select('*')
         .order('total_income', { ascending: false })
         .limit(50);
 
@@ -258,7 +258,7 @@ export class DatabaseRetriever {
             .from('hourly_baselines')
             .select('*')
             .or(`bus_id.eq.${busId},route_id.eq.${busInfo.route_id}`)
-            .not('avg_income_per_hour', 'is', null) // Only records with income data
+            .neq('avg_income_per_hour', null) // Only records with income data
             .order('avg_income_per_hour', { ascending: false })
             .limit(50);
 
